@@ -15,17 +15,15 @@ type APIServer struct {
 func NewAPIServer(addr string) *APIServer {
 
 	newServer := &APIServer{
-		addr: addr,
+		addr:   addr,
+		router: chi.NewRouter(),
 	}
-
-	newServer.runApi()
 
 	return newServer
 }
 
-func (s *APIServer) runApi() error {
+func initRoutes(s *APIServer) error {
 
-	s.router = chi.NewRouter()
 	apiRouter := chi.NewRouter()
 
 	s.router.Mount("/api/v1", apiRouter)

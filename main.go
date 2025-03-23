@@ -16,6 +16,10 @@ func main() {
 
 	initDb("db", server)
 
+	initMiddleware(server)
+
+	initRoutes(server)
+
 	fmt.Println("Listening on: ", server.addr)
 	log.Fatal(http.ListenAndServe(server.addr, server.router))
 
