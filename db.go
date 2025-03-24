@@ -6,7 +6,7 @@ import (
 	"log"
 )
 
-func initDb(dbName string, s *APIServer) {
+func initDb(dbName string) {
 	db, err := sql.Open("sqlite", fmt.Sprint("./", dbName))
 
 	if err != nil {
@@ -18,7 +18,7 @@ func initDb(dbName string, s *APIServer) {
 	age INTEGER NOT NULL,
 	created_at TIMESTAMP NOT NULL`)
 
-	s.db = db
+	server.db = db
 }
 
 func initTable(db *sql.DB, name string, schema string) {

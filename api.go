@@ -22,11 +22,11 @@ func NewAPIServer(addr string) *APIServer {
 	return newServer
 }
 
-func initRoutes(s *APIServer) error {
+func initRoutes() error {
 
 	apiRouter := chi.NewRouter()
 
-	s.router.Mount("/api/v1", apiRouter)
+	server.router.Mount("/api/v1", apiRouter)
 
 	apiRouter.Get("/users/", getUsers)
 	apiRouter.Post("/users/", createUser)

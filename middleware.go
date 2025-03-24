@@ -9,9 +9,9 @@ var middlewares = []func(http.Handler) http.Handler{
 	LoggingMiddleware,
 }
 
-func initMiddleware(s *APIServer) {
+func initMiddleware() {
 	for _, m := range middlewares {
-		s.router.Use(m)
+		server.router.Use(m)
 	}
 }
 

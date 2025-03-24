@@ -14,11 +14,11 @@ func main() {
 
 	server = NewAPIServer(":8080")
 
-	initDb("db", server)
+	initDb("db")
 
-	initMiddleware(server)
+	initMiddleware()
 
-	initRoutes(server)
+	initRoutes()
 
 	fmt.Println("Listening on: ", server.addr)
 	log.Fatal(http.ListenAndServe(server.addr, server.router))
