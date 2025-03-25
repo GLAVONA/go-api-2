@@ -14,9 +14,12 @@ func initDb(dbName string) {
 	}
 
 	initTable(db, "users", `id INTEGER PRIMARY KEY AUTOINCREMENT,
-	name TEXT NOT NULL,
-	age INTEGER NOT NULL,
-	created_at TIMESTAMP NOT NULL`)
+    username TEXT NOT NULL UNIQUE,
+    password TEXT NOT NULL,
+    name TEXT NOT NULL,
+    age INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL`)
 
 	server.db = db
 }
