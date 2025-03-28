@@ -11,29 +11,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type ErrorResponse struct {
-	Error   string `json:"error"`
-	Message string `json:"message,omitempty"`
-}
-
-type user struct {
-	Id        int       `json:"id"`
-	Username  string    `json:"username"`
-	Password  string    `json:"password"`
-	Name      string    `json:"name"`
-	Age       int       `json:"age"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
-}
-
-type userResponse struct {
-	Id       int    `json:"id"`
-	Username string `json:"username"`
-	Name     string `json:"name"`
-	Age      int    `json:"age"`
-}
-
-func getUsers(w http.ResponseWriter, r *http.Request) {
+func getUsersHandler(w http.ResponseWriter, r *http.Request) {
 	rows, err := server.db.Query("SELECT id, username, name, age FROM users")
 	if err != nil {
 		respondWithJSON(w, http.StatusInternalServerError, ErrorResponse{
@@ -71,7 +49,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, users)
 }
 
-func getUser(w http.ResponseWriter, r *http.Request) {
+func getUserHandler(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		respondWithJSON(w, http.StatusBadRequest, ErrorResponse{
@@ -103,7 +81,7 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, u)
 }
 
-func createUser(w http.ResponseWriter, r *http.Request) {
+func registerHandler(w http.ResponseWriter, r *http.Request) {
 	var u user
 	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
 		respondWithJSON(w, http.StatusBadRequest, ErrorResponse{
@@ -130,7 +108,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Failed to check username: %v", err)
 		return
 	}
-	if exists > 0 {
+	if exists {
 		respondWithJSON(w, http.StatusConflict, ErrorResponse{
 			Error:   "username_taken",
 			Message: "The username already exists",
@@ -177,11 +155,11 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, ToUserResponse(u))
 }
 
-func doesUserExist(u *user) (int, error) {
+func doesUserExist(u *user) (bool, error) {
 	var count int
 	query := `SELECT COUNT(*) FROM users WHERE username = ?`
 	err := server.db.QueryRow(query, u.Username).Scan(&count)
-	return count, err
+	return count > 0, err
 }
 
 func ToUserResponse(u user) userResponse {
@@ -196,4 +174,50 @@ func ToUserResponse(u user) userResponse {
 func HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	return string(bytes), err
+}
+
+func isPasswordMatch(password string, hash []byte) bool {
+	err := bcrypt.CompareHashAndPassword(hash, []byte(password))
+
+	return err == nil
+}
+
+func loginHandler(w http.ResponseWriter, r *http.Request) {
+	loginCredentials := user{}
+	err := json.NewDecoder(r.Body).Decode(&loginCredentials)
+	if err != nil {
+		respondWithJSON(w, http.StatusInternalServerError, ErrorResponse{Message: "Failed to decode user"})
+		log.Println("Failed to decode user")
+		return
+	}
+
+	userFromDb, err := getUserFromDb(&loginCredentials)
+	if err != nil {
+		respondWithJSON(w, http.StatusInternalServerError, ErrorResponse{Message: "Failed to login"})
+		log.Printf("Failed to check if user exists -- %#v -- %v", loginCredentials, err)
+
+		return
+	}
+	if userFromDb.Id == 0 {
+		respondWithJSON(w, http.StatusUnauthorized, ErrorResponse{Message: "Username or password does not exist"})
+		log.Printf("User does not exist -- %#v", loginCredentials)
+
+		return
+	}
+
+	if !isPasswordMatch(loginCredentials.Password, []byte(userFromDb.Password)) {
+		respondWithJSON(w, http.StatusUnauthorized, ErrorResponse{Message: "Username or password does not exist"})
+		log.Printf("Wrong password -- %#v", loginCredentials)
+
+		return
+	}
+
+}
+
+func getUserFromDb(u *user) (user, error) {
+	res := server.db.QueryRow("SELECT * FROM users WHERE username = ?", u.Username)
+	dbUser := user{}
+	err := res.Scan(&dbUser.Id, &dbUser.Username, &dbUser.Password, &dbUser.Name, &dbUser.Age, &dbUser.CreatedAt, &dbUser.UpdatedAt)
+
+	return dbUser, err
 }

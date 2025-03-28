@@ -28,10 +28,11 @@ func initRoutes() error {
 
 	server.router.Mount("/api/v1", apiRouter)
 
-	apiRouter.Get("/users/", getUsers)
-	apiRouter.Post("/users/", createUser)
+	apiRouter.Get("/users", getUsersHandler)
+	apiRouter.Post("/register", registerHandler)
+	apiRouter.Post("/login", loginHandler)
 
-	apiRouter.Get("/users/{id}", getUser)
+	apiRouter.Get("/users/{id}", getUserHandler)
 
 	return nil
 }
