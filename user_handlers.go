@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func getUsersHandler(w http.ResponseWriter, r *http.Request) {
-	rows, err := server.db.Query("SELECT id, username, name, age FROM users")
+	rows, err := server.db.Query("SELECT id, username FROM users")
 	if err != nil {
 		respondWithJSON(w, http.StatusInternalServerError, ErrorResponse{
 			Error:   "server_error",
@@ -26,7 +26,7 @@ func getUsersHandler(w http.ResponseWriter, r *http.Request) {
 	var users []userResponse
 	for rows.Next() {
 		var u userResponse
-		if err := rows.Scan(&u.Id, &u.Username, &u.Name, &u.Age); err != nil {
+		if err := rows.Scan(&u.Id, &u.Username); err != nil {
 			respondWithJSON(w, http.StatusInternalServerError, ErrorResponse{
 				Error:   "server_error",
 				Message: "Failed to scan user data",
@@ -50,18 +50,18 @@ func getUsersHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getUserHandler(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if id == "" {
+	username := chi.URLParam(r, "username")
+	if username == "" {
 		respondWithJSON(w, http.StatusBadRequest, ErrorResponse{
 			Error:   "invalid_request",
-			Message: "User ID is required",
+			Message: "Username is required",
 		})
 		return
 	}
 
 	var u userResponse
-	err := server.db.QueryRow("SELECT id, username, name, age FROM users WHERE id = ?", id).
-		Scan(&u.Id, &u.Username, &u.Name, &u.Age)
+	err := server.db.QueryRow("SELECT id, username FROM users WHERE username = ?", username).
+		Scan(&u.Id, &u.Username)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			respondWithJSON(w, http.StatusNotFound, ErrorResponse{
@@ -91,10 +91,10 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if u.Username == "" || u.Name == "" {
+	if u.Username == "" || u.Password == "" {
 		respondWithJSON(w, http.StatusBadRequest, ErrorResponse{
 			Error:   "invalid_input",
-			Message: "Username and name are required",
+			Message: "Username and password are required",
 		})
 		return
 	}
@@ -126,12 +126,11 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	timeNow := time.Now()
-	query := `
-        INSERT INTO users (username, password, name, age, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-    `
-	res, err := server.db.Exec(query, u.Username, hashedPassword, u.Name, u.Age, timeNow.Format(time.RFC3339), timeNow.Format(time.RFC3339))
+	query := getInsertQuery([]string{"id", "username", "password"})
+
+	u.Id = uuid.New().String()
+
+	_, err = server.db.Exec(query, u.Id, u.Username, hashedPassword)
 	if err != nil {
 		respondWithJSON(w, http.StatusInternalServerError, ErrorResponse{
 			Error:   "server_error",
@@ -140,17 +139,6 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Failed to insert user: %v", err)
 		return
 	}
-
-	id, err := res.LastInsertId()
-	if err != nil {
-		respondWithJSON(w, http.StatusInternalServerError, ErrorResponse{
-			Error:   "server_error",
-			Message: "Failed to retrieve new user ID",
-		})
-		log.Printf("Failed to get last insert ID: %v", err)
-		return
-	}
-	u.Id = int(id)
 
 	respondWithJSON(w, http.StatusOK, ToUserResponse(u))
 }
@@ -166,8 +154,6 @@ func ToUserResponse(u user) userResponse {
 	return userResponse{
 		Id:       u.Id,
 		Username: u.Username,
-		Name:     u.Name,
-		Age:      u.Age,
 	}
 }
 
@@ -193,14 +179,8 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 
 	userFromDb, err := getUserFromDb(&loginCredentials)
 	if err != nil {
-		respondWithJSON(w, http.StatusInternalServerError, ErrorResponse{Message: "Failed to login"})
-		log.Printf("Failed to check if user exists -- %#v -- %v", loginCredentials, err)
-
-		return
-	}
-	if userFromDb.Id == 0 {
-		respondWithJSON(w, http.StatusUnauthorized, ErrorResponse{Message: "Username or password does not exist"})
-		log.Printf("User does not exist -- %#v", loginCredentials)
+		respondWithJSON(w, http.StatusInternalServerError, ErrorResponse{Message: "Username or password does not exist"})
+		log.Printf("Failed to get user from Db -- %#v -- %v", loginCredentials, err)
 
 		return
 	}
@@ -217,7 +197,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 func getUserFromDb(u *user) (user, error) {
 	res := server.db.QueryRow("SELECT * FROM users WHERE username = ?", u.Username)
 	dbUser := user{}
-	err := res.Scan(&dbUser.Id, &dbUser.Username, &dbUser.Password, &dbUser.Name, &dbUser.Age, &dbUser.CreatedAt, &dbUser.UpdatedAt)
+	err := res.Scan(&dbUser.Id, &dbUser.Username, &dbUser.Password, &dbUser.CreatedAt, &dbUser.UpdatedAt)
 
 	return dbUser, err
 }

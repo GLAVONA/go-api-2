@@ -32,7 +32,7 @@ func initRoutes() error {
 	apiRouter.Post("/register", registerHandler)
 	apiRouter.Post("/login", loginHandler)
 
-	apiRouter.Get("/users/{id}", getUserHandler)
+	apiRouter.Get("/users/{username}", getUserHandler)
 
 	return nil
 }
