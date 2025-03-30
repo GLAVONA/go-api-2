@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 )
 
 func getUsersHandler(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +126,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := getInsertQuery([]string{"id", "username", "password"})
+	query := getInsertQuery("users", []string{"id", "username", "password"})
 
 	u.Id = uuid.New().String()
 
@@ -143,32 +143,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, ToUserResponse(u))
 }
 
-func doesUserExist(u *user) (bool, error) {
-	var count int
-	query := `SELECT COUNT(*) FROM users WHERE username = ?`
-	err := server.db.QueryRow(query, u.Username).Scan(&count)
-	return count > 0, err
-}
-
-func ToUserResponse(u user) userResponse {
-	return userResponse{
-		Id:       u.Id,
-		Username: u.Username,
-	}
-}
-
-func HashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	return string(bytes), err
-}
-
-func isPasswordMatch(password string, hash []byte) bool {
-	err := bcrypt.CompareHashAndPassword(hash, []byte(password))
-
-	return err == nil
-}
-
-func loginHandler(w http.ResponseWriter, r *http.Request) {
+func logInHandler(w http.ResponseWriter, r *http.Request) {
 	loginCredentials := user{}
 	err := json.NewDecoder(r.Body).Decode(&loginCredentials)
 	if err != nil {
@@ -179,25 +154,127 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 
 	userFromDb, err := getUserFromDb(&loginCredentials)
 	if err != nil {
-		respondWithJSON(w, http.StatusInternalServerError, ErrorResponse{Message: "Username or password does not exist"})
+		respondWithJSON(w, http.StatusUnauthorized, ErrorResponse{Message: "Username or password are wrong"})
 		log.Printf("Failed to get user from Db -- %#v -- %v", loginCredentials, err)
-
 		return
 	}
 
 	if !isPasswordMatch(loginCredentials.Password, []byte(userFromDb.Password)) {
-		respondWithJSON(w, http.StatusUnauthorized, ErrorResponse{Message: "Username or password does not exist"})
+		respondWithJSON(w, http.StatusUnauthorized, ErrorResponse{Message: "Username or password are wrong"})
 		log.Printf("Wrong password -- %#v", loginCredentials)
-
 		return
 	}
 
+	sessionToken := generateToken(32)
+	csrfToken := generateToken(32)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    sessionToken,
+		Expires:  time.Now().Add(24 * time.Hour),
+		HttpOnly: true,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "csrf_token",
+		Value:    csrfToken,
+		Expires:  time.Now().Add(24 * time.Hour),
+		HttpOnly: false,
+	})
+
+	loginUuid := uuid.New()
+
+	insertQuery := getInsertQuery("logins", []string{"id", "user_id", "session_token", "csrf_token"})
+
+	_, err = server.db.Exec(insertQuery, loginUuid, userFromDb.Id, sessionToken, csrfToken)
+
+	if err != nil {
+		respondWithJSON(w, http.StatusInternalServerError, ErrorResponse{Message: "Something went wrong"})
+		log.Printf("Couldn't save session -- %v -- %v", loginCredentials, err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, "Authenticated!")
+
 }
 
-func getUserFromDb(u *user) (user, error) {
-	res := server.db.QueryRow("SELECT * FROM users WHERE username = ?", u.Username)
-	dbUser := user{}
-	err := res.Scan(&dbUser.Id, &dbUser.Username, &dbUser.Password, &dbUser.CreatedAt, &dbUser.UpdatedAt)
+func logOutHandler(w http.ResponseWriter, r *http.Request) {
+	sessionCookie, err := r.Cookie("session_token")
+	if err != nil {
+		if err == http.ErrNoCookie {
+			respondWithJSON(w, http.StatusUnauthorized, ErrorResponse{
+				Error:   "unauthorized",
+				Message: "No active session found to log out.",
+			})
+			log.Println("Logout failed: No session cookie found (middleware should have prevented this)")
+		} else {
+			respondWithJSON(w, http.StatusBadRequest, ErrorResponse{
+				Error:   "bad_request",
+				Message: "Could not read session cookie.",
+			})
+			log.Printf("Logout failed: Error reading session cookie: %v", err)
+		}
+		return
+	}
 
-	return dbUser, err
+	sessionToken := sessionCookie.Value
+
+	query := "DELETE FROM logins WHERE session_token = ?"
+	result, err := server.db.ExecContext(r.Context(), query, sessionToken) // Use ExecContext for cancellation propagation
+	if err != nil {
+		respondWithJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error:   "server_error",
+			Message: "Failed to terminate session.",
+		})
+		log.Printf("Logout failed: Could not delete session token '%s' from database: %v", sessionToken, err)
+		return
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Printf("Logout warning: Could not verify session deletion for token '%s': %v", sessionToken, err)
+	} else if rowsAffected == 0 {
+		log.Printf("Logout warning: Session token '%s' was not found in the database during logout.", sessionToken)
+	} else {
+		log.Printf("Logout successful: Deleted session for token '%s' from database.", sessionToken)
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "csrf_token",
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		HttpOnly: false,
+		Secure:   r.TLS != nil,
+	})
+
+	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Logged out successfully"})
+}
+
+func protectedHandler(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(userIDKey).(string)
+
+	if !ok {
+		respondWithJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error:   "server_error",
+			Message: "Could not retrieve user ID from context",
+		})
+		log.Println("Error: userID not found in context for protected handler")
+		return
+	}
+
+	log.Printf("User %s accessed protected route", userID)
+
+	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Welcome authenticated user!", "userID": userID})
 }

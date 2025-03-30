@@ -17,9 +17,3 @@ type userResponse struct {
 	Id       string `json:"id"`
 	Username string `json:"username"`
 }
-
-type login struct {
-	HashPassword string
-	SessionToken string
-	CSRFToken    string
-}

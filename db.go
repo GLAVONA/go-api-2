@@ -28,6 +28,22 @@ func initDb(dbName string) {
 	END;
 `)
 
+	createTable(db, "logins", `id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    session_token TEXT NOT NULL UNIQUE,
+    csrf_token TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE`)
+
+	createTrigger(db, "update_login_timestamp", `BEFORE UPDATE ON logins 
+FOR EACH ROW 
+BEGIN
+    UPDATE logins 
+    SET updated_at = datetime('now') 
+    WHERE id = OLD.id;
+END;`)
+
 	server.db = db
 }
 

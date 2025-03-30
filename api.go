@@ -26,13 +26,21 @@ func initRoutes() error {
 
 	apiRouter := chi.NewRouter()
 
-	server.router.Mount("/api/v1", apiRouter)
-
-	apiRouter.Get("/users", getUsersHandler)
+	// --- Public API Routes ---
 	apiRouter.Post("/register", registerHandler)
-	apiRouter.Post("/login", loginHandler)
+	apiRouter.Post("/login", logInHandler)
 
-	apiRouter.Get("/users/{username}", getUserHandler)
+	// --- Protected API Routes ---
+	apiRouter.Group(func(protectedRouter chi.Router) {
+		protectedRouter.Use(AuthenticationMiddleware, CSRFProtectionMiddleware)
+
+		protectedRouter.Get("/users", getUsersHandler)
+		protectedRouter.Post("/logout", logOutHandler)
+		protectedRouter.Get("/users/{username}", getUserHandler)
+		protectedRouter.Get("/protected", protectedHandler)
+	})
+
+	server.router.Mount("/api/v1", apiRouter)
 
 	return nil
 }
