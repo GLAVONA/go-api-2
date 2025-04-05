@@ -42,6 +42,8 @@ func initRoutes() error {
 
 	})
 
+	server.router.Use(LoggingMiddleware)
+
 	server.router.Mount("/api/v1", apiRouter)
 
 	return nil

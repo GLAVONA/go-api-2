@@ -16,8 +16,6 @@ func main() {
 
 	initDb("db")
 
-	initMiddleware()
-
 	initRoutes()
 
 	fmt.Println("Listening on: ", server.addr)

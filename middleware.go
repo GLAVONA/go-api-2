@@ -3,24 +3,13 @@ package main
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 )
 
-var middlewares = []func(http.Handler) http.Handler{
-	LoggingMiddleware,
-}
-
-func initMiddleware() {
-	for _, m := range middlewares {
-		server.router.Use(m)
-	}
-}
-
 func LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Printf("%v %v\n", r.Method, r.URL.Path)
+		log.Printf("%v %v\n", r.Method, r.URL.Path)
 		next.ServeHTTP(w, r)
 	})
 }
