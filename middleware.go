@@ -27,7 +27,7 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 
 type contextKey string
 
-const userIDKey contextKey = "userID"
+const csrfTokenCtxKey contextKey = "csrfToken"
 
 func AuthenticationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -50,10 +50,10 @@ func AuthenticationMiddleware(next http.Handler) http.Handler {
 		}
 
 		sessionToken := sessionCookie.Value
-		var userID string
+		var csrfToken string
 
-		query := "SELECT user_id FROM logins WHERE session_token = ?"
-		err = server.db.QueryRow(query, sessionToken).Scan(&userID)
+		query := "SELECT csrf_token FROM logins WHERE session_token = ?"
+		err = server.db.QueryRow(query, sessionToken).Scan(&csrfToken)
 
 		if err != nil {
 			if err == sql.ErrNoRows {
@@ -79,7 +79,7 @@ func AuthenticationMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), userIDKey, userID)
+		ctx := context.WithValue(r.Context(), csrfTokenCtxKey, csrfToken)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -87,13 +87,11 @@ func AuthenticationMiddleware(next http.Handler) http.Handler {
 
 func CSRFProtectionMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip CSRF check for safe methods
 		if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions || r.Method == http.MethodTrace {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		// Get the CSRF token from the request header or form
 		csrfTokenFromRequest := r.Header.Get("X-CSRF-Token")
 		if csrfTokenFromRequest == "" && (r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodDelete) {
 			if err := r.ParseForm(); err != nil {
@@ -116,49 +114,13 @@ func CSRFProtectionMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		sessionCookie, err := r.Cookie("session_token")
-		if err != nil {
-			if err == http.ErrNoCookie {
-				respondWithJSON(w, http.StatusUnauthorized, ErrorResponse{
-					Error:   "unauthorized",
-					Message: "No session cookie provided for CSRF check",
-				})
-				log.Println("CSRF check failed: No session cookie")
-				return
-			}
-			respondWithJSON(w, http.StatusBadRequest, ErrorResponse{
-				Error:   "bad_request",
-				Message: "Error reading session cookie for CSRF check",
-			})
-			log.Printf("CSRF check failed: Error reading session cookie: %v", err)
-			return
-		}
-		sessionToken := sessionCookie.Value
-
-		var csrfTokenFromSession string
-		query := "SELECT csrf_token FROM logins WHERE session_token = ?"
-		err = server.db.QueryRow(query, sessionToken).Scan(&csrfTokenFromSession)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				respondWithJSON(w, http.StatusUnauthorized, ErrorResponse{
-					Error:   "unauthorized",
-					Message: "Invalid or expired session token for CSRF check",
-				})
-				log.Printf("CSRF check failed: Invalid session token: %s", sessionToken)
-				http.SetCookie(w, &http.Cookie{
-					Name:     "session_token",
-					Value:    "",
-					Path:     "/",
-					MaxAge:   -1,
-					HttpOnly: true,
-				})
-				return
-			}
+		csrfTokenFromSession, ok := r.Context().Value(csrfTokenCtxKey).(string)
+		if !ok {
 			respondWithJSON(w, http.StatusInternalServerError, ErrorResponse{
 				Error:   "server_error",
-				Message: "Failed to validate CSRF token",
+				Message: "Could not retrieve csrfToken from context",
 			})
-			log.Printf("CSRF check failed: Database error validating CSRF token: %v", err)
+			log.Println("Error: CSRF Token no found in context of CSRF Protection Middleware")
 			return
 		}
 
@@ -171,7 +133,6 @@ func CSRFProtectionMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		log.Println("CSRF PASSED")
 		next.ServeHTTP(w, r)
 	})
 }

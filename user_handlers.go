@@ -263,7 +263,7 @@ func logOutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func protectedHandler(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value(userIDKey).(string)
+	csrfToken, ok := r.Context().Value(csrfTokenCtxKey).(string)
 
 	if !ok {
 		respondWithJSON(w, http.StatusInternalServerError, ErrorResponse{
@@ -274,7 +274,7 @@ func protectedHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("User %s accessed protected route", userID)
+	log.Printf("User %s accessed protected route", csrfToken)
 
-	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Welcome authenticated user!", "userID": userID})
+	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Welcome authenticated user!", "userID": csrfToken})
 }

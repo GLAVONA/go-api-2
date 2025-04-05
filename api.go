@@ -38,6 +38,8 @@ func initRoutes() error {
 		protectedRouter.Post("/logout", logOutHandler)
 		protectedRouter.Get("/users/{username}", getUserHandler)
 		protectedRouter.Get("/protected", protectedHandler)
+		protectedRouter.Post("/protected", protectedHandler)
+
 	})
 
 	server.router.Mount("/api/v1", apiRouter)
