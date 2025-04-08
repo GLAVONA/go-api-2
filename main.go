@@ -10,6 +10,10 @@ import (
 
 var server *APIServer
 
+var clients = Clients{
+	cMap: make(map[string]*Client),
+}
+
 func main() {
 
 	server = NewAPIServer(":8080")

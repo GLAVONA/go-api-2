@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/time/rate"
 )
 
 func getInsertQuery(table string, fields []string) string {
@@ -57,4 +58,18 @@ func generateToken(length int) string {
 	}
 
 	return base64.URLEncoding.EncodeToString(bytes)
+}
+
+func getClientLimiter(ip string, clients *Clients) *rate.Limiter {
+	clients.mu.Lock()
+	defer clients.mu.Unlock()
+
+	if client, exists := clients.cMap[ip]; exists {
+
+		return client.limiter
+	}
+
+	limiter := rate.NewLimiter(1, 2)
+	clients.cMap[ip] = &Client{limiter: limiter}
+	return limiter
 }

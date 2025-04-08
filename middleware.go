@@ -14,6 +14,20 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func RateLimiterMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ip := r.RemoteAddr
+		limiter := getClientLimiter(ip, &clients)
+
+		if !limiter.Allow() {
+			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 type contextKey string
 
 const csrfTokenCtxKey contextKey = "csrfToken"

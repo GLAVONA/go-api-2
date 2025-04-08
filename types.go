@@ -1,5 +1,11 @@
 package main
 
+import (
+	"sync"
+
+	"golang.org/x/time/rate"
+)
+
 type ErrorResponse struct {
 	Error   string `json:"error"`
 	Message string `json:"message,omitempty"`
@@ -16,4 +22,13 @@ type user struct {
 type userResponse struct {
 	Id       string `json:"id"`
 	Username string `json:"username"`
+}
+
+type Client struct {
+	limiter *rate.Limiter
+}
+
+type Clients struct {
+	cMap map[string]*Client
+	mu   sync.Mutex
 }

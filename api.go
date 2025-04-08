@@ -32,7 +32,7 @@ func initRoutes() error {
 
 	// --- Protected API Routes ---
 	apiRouter.Group(func(protectedRouter chi.Router) {
-		protectedRouter.Use(AuthenticationMiddleware, CSRFProtectionMiddleware)
+		protectedRouter.Use(RateLimiterMiddleware, AuthenticationMiddleware, CSRFProtectionMiddleware)
 
 		protectedRouter.Get("/users", getUsersHandler)
 		protectedRouter.Post("/logout", logOutHandler)
