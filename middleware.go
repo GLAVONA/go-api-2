@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"net"
 	"net/http"
 )
 
@@ -16,7 +17,12 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 
 func RateLimiterMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := r.RemoteAddr
+		// TODO: remove this in prod?
+		ip, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			log.Printf("Failed stripping port of: %v", r.RemoteAddr)
+		}
+
 		limiter := getClientLimiter(ip, &clients)
 
 		if !limiter.Allow() {
