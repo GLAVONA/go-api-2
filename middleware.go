@@ -17,7 +17,6 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 
 func RateLimiterMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// TODO: remove this in prod?
 		ip, _, err := net.SplitHostPort(r.RemoteAddr)
 		if err != nil {
 			log.Printf("Failed stripping port of: %v", r.RemoteAddr)

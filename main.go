@@ -22,6 +22,8 @@ func main() {
 
 	initRoutes()
 
+	cleanUpClients(&clients)
+
 	fmt.Println("Listening on: ", server.addr)
 	log.Fatal(http.ListenAndServe(server.addr, server.router))
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"sync"
+	"time"
 
 	"golang.org/x/time/rate"
 )
@@ -25,7 +26,8 @@ type userResponse struct {
 }
 
 type Client struct {
-	limiter *rate.Limiter
+	limiter        *rate.Limiter
+	lastInteracted time.Time
 }
 
 type Clients struct {

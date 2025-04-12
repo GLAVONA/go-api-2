@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/time/rate"
@@ -66,10 +67,27 @@ func getClientLimiter(ip string, clients *Clients) *rate.Limiter {
 
 	if client, exists := clients.cMap[ip]; exists {
 
+		client.lastInteracted = time.Now()
+
 		return client.limiter
 	}
 
-	limiter := rate.NewLimiter(1, 2)
-	clients.cMap[ip] = &Client{limiter: limiter}
+	limiter := rate.NewLimiter(Config.limiter.rate, Config.limiter.burst)
+	clients.cMap[ip] = &Client{limiter: limiter, lastInteracted: time.Now()}
 	return limiter
+}
+
+func cleanUpClients(clients *Clients) {
+	ticker := time.NewTicker(Config.usersCleanupTick)
+	go func() {
+		for range ticker.C {
+			clients.mu.Lock()
+			for ip, client := range clients.cMap {
+				if time.Since(client.lastInteracted) > Config.cleanupSince {
+					delete(clients.cMap, ip)
+				}
+			}
+			clients.mu.Unlock()
+		}
+	}()
 }
