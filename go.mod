@@ -1,4 +1,4 @@
-module github.com/glavona/go-api-2
+module github.com/glavona/go-auth-service
 
 go 1.24.1
 
