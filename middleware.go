@@ -17,9 +17,17 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 
 func RateLimiterMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			log.Printf("Failed stripping port of: %v", r.RemoteAddr)
+		ip := r.Header.Get("X-Forwarded-For")
+
+		if ip == "" {
+			var err error
+			ip, _, err = net.SplitHostPort(r.RemoteAddr)
+
+			if err != nil {
+				log.Printf("Failed stripping port of: %v", r.RemoteAddr)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
 		}
 
 		limiter := getClientLimiter(ip, &clients)
