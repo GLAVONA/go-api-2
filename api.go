@@ -22,7 +22,7 @@ func NewAPIServer(addr string) *APIServer {
 	return newServer
 }
 
-func initRoutes() error {
+func initRoutes() {
 
 	apiRouter := chi.NewRouter()
 
@@ -32,7 +32,7 @@ func initRoutes() error {
 
 	// --- Protected API Routes ---
 	apiRouter.Group(func(protectedRouter chi.Router) {
-		protectedRouter.Use(RateLimiterMiddleware, AuthenticationMiddleware, CSRFProtectionMiddleware)
+		protectedRouter.Use(AuthenticationMiddleware, CSRFProtectionMiddleware)
 
 		protectedRouter.Get("/users", getUsersHandler)
 		protectedRouter.Post("/logout", logOutHandler)
@@ -42,9 +42,7 @@ func initRoutes() error {
 
 	})
 
-	server.router.Use(LoggingMiddleware)
+	server.router.Use(LoggingMiddleware, RateLimiterMiddleware)
 
 	server.router.Mount("/api/v1", apiRouter)
-
-	return nil
 }
